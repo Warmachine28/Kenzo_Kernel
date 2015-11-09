@@ -686,6 +686,11 @@ config TRACER_PKT
 	  processor communication protocols. The profiling information
 	  can be logged into the tracer packet itself.
 
+config STATE_NOTIFIER
+        bool "State Notifier"
+	default n
+
+
 config MSM_VSENS
 	bool "Voltage Sensor Monitoring"
 	help
