@@ -114,6 +114,15 @@ enum device_status {
 #define F12_MAX_X		65536
 #define F12_MAX_Y		65536
 
+<<<<<<< HEAD
+=======
+#ifdef CONFIG_MSM_HOTPLUG
+extern bool msm_hotplug_scr_suspended;
+extern void msm_hotplug_suspend(void);
+extern void msm_hotplug_resume(void);
+#endif
+
+>>>>>>> 00f4cc7... msm_hotplug: Resume when finger print working to boost up the device
 static int synaptics_rmi4_i2c_read(struct synaptics_rmi4_data *rmi4_data,
 		unsigned short addr, unsigned char *data,
 		unsigned short length);
@@ -4226,6 +4235,31 @@ static int synaptics_rmi4_suspend(struct device *dev)
 	struct synaptics_rmi4_data *rmi4_data = dev_get_drvdata(dev);
 	int retval;
 
+<<<<<<< HEAD
+=======
+#ifdef CONFIG_MSM_HOTPLUG
+	msm_hotplug_scr_suspended = true;
+	msm_hotplug_suspend();
+#endif
+
+#ifdef CONFIG_TOUCHSCREEN_SCROFF_VOLCTR
+	scr_suspended = true;
+
+	if (sovc_switch && sovc_tmp_onoff) {
+		if (!irq_wake_enabled) {
+			enable_irq_wake(rmi4_data->irq);
+			irq_wake_enabled = true;
+		}
+
+		mutex_lock(&suspended_mutex);
+		rmi4_data->suspended = true;
+		mutex_unlock(&suspended_mutex);
+
+		return 0;
+	}
+#endif
+
+>>>>>>> 00f4cc7... msm_hotplug: Resume when finger print working to boost up the device
 	if (rmi4_data->stay_awake) {
 		rmi4_data->staying_awake = true;
 		return 0;
@@ -4310,7 +4344,29 @@ err_lpm_regulator:
 static int synaptics_rmi4_resume(struct device *dev)
 {
 	struct synaptics_rmi4_data *rmi4_data = dev_get_drvdata(dev);
+<<<<<<< HEAD
 	int retval;
+=======
+
+#ifdef CONFIG_MSM_HOTPLUG
+	msm_hotplug_scr_suspended = false;
+	msm_hotplug_resume();
+#endif
+
+#ifdef CONFIG_TOUCHSCREEN_SCROFF_VOLCTR
+	scr_suspended = false;
+
+	if (irq_wake_enabled) {
+		disable_irq_wake(rmi4_data->irq);
+		irq_wake_enabled = false;
+
+		mutex_lock(&suspended_mutex);
+		rmi4_data->suspended = false;
+		mutex_unlock(&suspended_mutex);
+		return 0;
+	}
+#endif
+>>>>>>> 00f4cc7... msm_hotplug: Resume when finger print working to boost up the device
 
 	if (rmi4_data->staying_awake)
 		return 0;
