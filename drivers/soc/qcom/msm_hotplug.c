@@ -27,10 +27,16 @@
 #include <linux/math64.h>
 #include <linux/kernel_stat.h>
 #include <linux/tick.h>
+<<<<<<< HEAD
 
 #ifdef CONFIG_FB
 #include <linux/fb.h>
 #endif
+=======
+#include <linux/hrtimer.h>
+#include <asm-generic/cputime.h>
+#include <linux/msm_hotplug.h>
+>>>>>>> e700ec0... msm_hotplug: Do not hotplugging when disabled or suspended
 
 // Change this value for your device
 #define LITTLE_CORES	4
@@ -52,6 +58,20 @@
 #define DEFAULT_BIG_CORE_DOWN_DELAY	800
 #define DEFAULT_MAX_CPUS_ONLINE_SUSP	1
 
+<<<<<<< HEAD
+=======
+unsigned int msm_enabled = HOTPLUG_ENABLED;
+
+// Use for msm_hotplug_resume_timeout
+#define HOTPLUG_TIMEOUT			2000
+static bool timeout_enabled = false;
+static cputime64_t pre_time;
+bool msm_hotplug_scr_suspended = false;
+EXPORT_SYMBOL(msm_hotplug_scr_suspended);
+
+void msm_hotplug_suspend(void);
+
+>>>>>>> e700ec0... msm_hotplug: Do not hotplugging when disabled or suspended
 static unsigned int debug = 0;
 module_param_named(debug_mask, debug, uint, 0644);
 
@@ -66,7 +86,6 @@ static struct notifier_block notif;
 #endif
 
 static struct cpu_hotplug {
-	unsigned int msm_enabled;
 	unsigned int suspended;
 	unsigned int min_cpus_online_res;
 	unsigned int max_cpus_online_res;
@@ -87,7 +106,6 @@ static struct cpu_hotplug {
 	struct mutex msm_hotplug_mutex;
 	struct notifier_block notif;
 } hotplug = {
-	.msm_enabled = HOTPLUG_ENABLED,
 	.min_cpus_online = DEFAULT_MIN_CPUS_ONLINE,
 	.max_cpus_online = DEFAULT_MAX_CPUS_ONLINE,
 	.suspended = 0,
@@ -461,7 +479,7 @@ static void online_cpu(unsigned int target)
 {
 	unsigned int online_cpus;
 
-	if (!hotplug.msm_enabled)
+	if (!msm_enabled)
 		return;
 
 	online_cpus = num_online_little_cpus();
@@ -483,7 +501,7 @@ static void offline_cpu(unsigned int target)
 	unsigned int online_cpus;
 	u64 now;
 
-	if (!hotplug.msm_enabled)
+	if (!msm_enabled)
 		return;
 
 	online_cpus = num_online_little_cpus();
@@ -827,7 +845,7 @@ static int msm_hotplug_start(void)
 err_dev:
 	destroy_workqueue(hotplug_wq);
 err_out:
-	hotplug.msm_enabled = 0;
+	msm_enabled = 0;
 	return ret;
 }
 
@@ -913,7 +931,7 @@ static ssize_t show_enable_hotplug(struct device *dev,
 				   struct device_attribute *msm_hotplug_attrs,
 				   char *buf)
 {
-	return sprintf(buf, "%u\n", hotplug.msm_enabled);
+	return sprintf(buf, "%u\n", msm_enabled);
 }
 
 static ssize_t store_enable_hotplug(struct device *dev,
@@ -927,12 +945,12 @@ static ssize_t store_enable_hotplug(struct device *dev,
 	if (ret != 1 || val < 0 || val > 1)
 		return -EINVAL;
 
-	if (val == hotplug.msm_enabled)
+	if (val == msm_enabled)
 		return count;
 
-	hotplug.msm_enabled = val;
+	msm_enabled = val;
 
-	if (hotplug.msm_enabled)
+	if (msm_enabled)
 		ret = msm_hotplug_start();
 	else
 		msm_hotplug_stop();
@@ -1349,7 +1367,7 @@ static int msm_hotplug_probe(struct platform_device *pdev)
 		goto err_dev;
 	}
 
-	if (hotplug.msm_enabled) {
+	if (msm_enabled) {
 		ret = msm_hotplug_start();
 		if (ret != 0)
 			goto err_dev;
@@ -1368,7 +1386,7 @@ static struct platform_device msm_hotplug_device = {
 
 static int msm_hotplug_remove(struct platform_device *pdev)
 {
-	if (hotplug.msm_enabled)
+	if (msm_enabled)
 		msm_hotplug_stop();
 
 	return 0;
