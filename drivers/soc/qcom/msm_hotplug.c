@@ -540,6 +540,22 @@ static void msm_hotplug_work(struct work_struct *work)
 		return;
 	}
 
+<<<<<<< HEAD
+=======
+	if (timeout_enabled) {
+		if (ktime_to_ms(ktime_get()) - pre_time > HOTPLUG_TIMEOUT) {
+			if (msm_hotplug_scr_suspended) {
+				msm_hotplug_suspend();
+				return;
+			}
+
+			timeout_enabled = false;
+			msm_hotplug_fingerprint_called = false;
+		}
+		goto reschedule;
+	}
+
+>>>>>>> ac135ef... msm_hotplug, fingerprint: Don't turn off cpus and make boom faster
 	update_load_stats();
 
 	if (stats.cur_max_load >= hotplug.fast_lane_load) {
@@ -642,7 +658,8 @@ static void msm_hotplug_resume(void)
 			if (cpu == 0)
 				continue;
 			cpu_up(cpu);
-			apply_down_lock(cpu);
+			if (!timeout_enabled)
+				apply_down_lock(cpu);
 		}
 	}
 
