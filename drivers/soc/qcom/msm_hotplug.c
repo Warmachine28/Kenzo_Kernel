@@ -41,10 +41,10 @@
 #define START_DELAY			HZ * 20
 #define DEFAULT_HISTORY_SIZE		10
 #define DEFAULT_DOWN_LOCK_DUR		1000
-#define DEFAULT_MIN_CPUS_ONLINE		1
+#define DEFAULT_MIN_CPUS_ONLINE		2
 #define DEFAULT_MAX_CPUS_ONLINE		LITTLE_CORES
 #define DEFAULT_FAST_LANE_LOAD		99
-#define DEFAULT_MAX_CPUS_ONLINE_SUSP	1
+#define DEFAULT_MAX_CPUS_ONLINE_SUSP	2
 
 static unsigned int debug = 0;
 module_param_named(debug_mask, debug, uint, 0644);
