@@ -608,7 +608,7 @@ ifdef CONFIG_CC_STACKPROTECTOR_STRONG
 else
   # Force off for distro compilers that enable stack protector by default.
   stackp-flag := $(call cc-option, -fno-stack-protector)
-endifq
+endif
 KBUILD_CFLAGS += $(stackp-flag)
 
 # This warning generated too much noise in a regular build.
