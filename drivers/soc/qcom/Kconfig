@@ -686,10 +686,6 @@ config TRACER_PKT
 	  processor communication protocols. The profiling information
 	  can be logged into the tracer packet itself.
 
-config STATE_NOTIFIER
-        bool "State Notifier"
-	default n
-
 config MSM_PERFORMANCE_HOTPLUG_ON
         bool "Hotplug functionality through msm_performance turned on"
         depends on MSM_PERFORMANCE
