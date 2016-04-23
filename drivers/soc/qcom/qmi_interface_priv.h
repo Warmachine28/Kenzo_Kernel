@@ -80,10 +80,6 @@ struct svc_event_nb {
 	spinlock_t nb_lock;
 	uint32_t service_id;
 	uint32_t instance_id;
-<<<<<<< HEAD
-=======
-	int svc_avail;
->>>>>>> 04f72a1... soc: qcom: qmi: Fix service event notification
 	struct raw_notifier_head svc_event_rcvr_list;
 	struct list_head list;
 	struct mutex svc_addr_list_lock;
