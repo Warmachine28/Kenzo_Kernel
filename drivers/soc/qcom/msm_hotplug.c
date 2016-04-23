@@ -52,19 +52,6 @@
 #define DEFAULT_BIG_CORE_DOWN_DELAY	800
 #define DEFAULT_MAX_CPUS_ONLINE_SUSP	1
 
-<<<<<<< HEAD
-=======
-unsigned int msm_enabled = HOTPLUG_ENABLED;
-
-// Use for msm_hotplug_resume_timeout
-#define HOTPLUG_TIMEOUT			2000
-static bool timeout_enabled = false;
-static cputime64_t pre_time;
-bool msm_hotplug_scr_suspended = false;
-
-void msm_hotplug_suspend(void);
-
->>>>>>> ee2417f... msm_hotplug: Remove useless EXPORT_SYMBOL()
 static unsigned int debug = 0;
 module_param_named(debug_mask, debug, uint, 0644);
 
