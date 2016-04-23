@@ -4,7 +4,7 @@
  * Copyright (c) 2010-2014, The Linux Foundation. All rights reserved.
  * Copyright (c) 2013-2014, Fluxi <linflux@arcor.de>
  * Copyright (c) 2013-2015, Pranav Vashi <neobuddy89@gmail.com>
- * Copyright (c) 2015, jollaman999 <admin@jollaman999.com> / Adaptive for big and little.
+ * Copyright (c) 2016, jollaman999 <admin@jollaman999.com> / Adaptive for big.LITTLE
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -26,10 +26,9 @@
 #include <linux/math64.h>
 #include <linux/kernel_stat.h>
 #include <linux/tick.h>
-
-#ifdef CONFIG_FB
-#include <linux/fb.h>
-#endif
+#include <linux/hrtimer.h>
+#include <asm-generic/cputime.h>
+#include <linux/msm_hotplug.h>
 
 // Change this value for your device
 #define LITTLE_CORES	4
@@ -44,8 +43,19 @@
 #define DEFAULT_MIN_CPUS_ONLINE		2
 #define DEFAULT_MAX_CPUS_ONLINE		LITTLE_CORES
 #define DEFAULT_FAST_LANE_LOAD		99
-#define DEFAULT_BIG_CORE_UP_DELAY	2500
+#define DEFAULT_BIG_CORE_UP_DELAY	1200
 #define DEFAULT_MAX_CPUS_ONLINE_SUSP	2
+
+unsigned int msm_enabled = HOTPLUG_ENABLED;
+
+// Use for msm_hotplug_resume_timeout
+#define HOTPLUG_TIMEOUT			2000
+static bool timeout_enabled = false;
+static cputime64_t pre_time;
+bool msm_hotplug_scr_suspended = false;
+bool msm_hotplug_fingerprint_called = false;
+
+void msm_hotplug_suspend(void);
 
 static unsigned int debug = 0;
 module_param_named(debug_mask, debug, uint, 0644);
@@ -56,12 +66,7 @@ do { 				\
 		pr_info(msg);	\
 } while (0)
 
-#ifdef CONFIG_FB
-static struct notifier_block notif;
-#endif
-
 static struct cpu_hotplug {
-	unsigned int msm_enabled;
 	unsigned int suspended;
 	unsigned int min_cpus_online_res;
 	unsigned int max_cpus_online_res;
@@ -76,7 +81,6 @@ static struct cpu_hotplug {
 	struct mutex msm_hotplug_mutex;
 	struct notifier_block notif;
 } hotplug = {
-	.msm_enabled = HOTPLUG_ENABLED,
 	.min_cpus_online = DEFAULT_MIN_CPUS_ONLINE,
 	.max_cpus_online = DEFAULT_MAX_CPUS_ONLINE,
 	.suspended = 0,
@@ -337,21 +341,9 @@ static int get_lowest_load_cpu(void)
 	return lowest_cpu;
 }
 
-static void big_up(unsigned int online_little)
+static void big_up(unsigned int target_big)
 {
 	int cpu;
-	unsigned int target_big; // how many big cores to online
-
-	// If LITTLE_CORES is 4 and BIG_CORES is 2.
-	// online_little == 4 -> Turn on all of big cores. (2)
-	// online_little == 3 -> Turn on half of big cores. (1)
-	// else -> skip
-	if (online_little == LITTLE_CORES)
-		target_big = BIG_CORES;
-	else if (online_little == LITTLE_CORES - 1)
-		target_big = BIG_CORES / 2;
-	else
-		return;
 
 	if (!big_core_up_ready_checked) {
 		big_core_up_ready_checked = true;
@@ -374,28 +366,19 @@ static void big_up(unsigned int online_little)
 	}
 }
 
-static void big_down(unsigned int online_little)
+static void big_down(unsigned int target_big)
 {
 	int cpu;
-	unsigned int target_big; // how many big cores to offline
+	unsigned int target_big_off; // how many big cores to offline
 
-	// If LITTLE_CORES is 4 and BIG_CORES is 2.
-	// online_little == 4 -> skip
-	// online_little == 3 -> Turn off half of big cores. (1)
-	// else -> Turn off all of big cores. (2)
-	if (online_little == LITTLE_CORES)
-		return;
-	else if (online_little == LITTLE_CORES - 1)
-		target_big = BIG_CORES / 2;
-	else
-		target_big = BIG_CORES;
+	target_big_off = BIG_CORES - target_big;
 
 	for (cpu = LITTLE_CORES; cpu < LITTLE_CORES + BIG_CORES; cpu++) {
 		if (!cpu_online(cpu))
 			continue;
 		if (check_down_lock(cpu))
 			continue;
-		if (target_big <= BIG_CORES - num_online_big_cpus())
+		if (target_big_off <= BIG_CORES - num_online_big_cpus())
 			break;
 		cpu_down(cpu);
 	}
@@ -404,21 +387,29 @@ static void big_down(unsigned int online_little)
 static void big_updown(void)
 {
 	unsigned int online_little, online_big;
+	unsigned int target_big;
 
-<<<<<<< HEAD
-	if (!hotplug.msm_enabled)
-		return;
-=======
 	online_little = num_online_little_cpus();
 	online_big = num_online_big_cpus();
 
-	if (online_little >= LITTLE_CORES - 1 &&
-	    online_big < BIG_CORES)
-		big_up(online_little);
-	else if (online_big != 0)
-		big_down(online_little);
+	// If LITTLE_CORES is 4 and BIG_CORES is 2.
+	// online_little == 4 -> Turn on all of big cores. (2)
+	// online_little == 3 -> Turn on half of big cores. (1)
+	// else               -> Turn off all of big cores. (0)
+	if (online_little == LITTLE_CORES)
+		target_big = BIG_CORES;
+	else if (online_little == LITTLE_CORES - 1)
+		target_big = BIG_CORES / 2;
+	else
+		target_big = 0;
+
+	if (online_big != target_big) {
+		if (target_big > online_big)
+			big_up(target_big);
+		else if (target_big < online_big)
+			big_down(target_big);
+	}
 }
->>>>>>> 1f0327d... msm_hotplug: Remove up/down work structure and improve big core up/down
 
 static void little_up(void)
 {
@@ -474,14 +465,7 @@ static void online_cpu(unsigned int target)
 
 static void offline_cpu(unsigned int target)
 {
-<<<<<<< HEAD
-	unsigned int online_cpus;
-
-	if (!hotplug.msm_enabled)
-		return;
-=======
 	unsigned int online_little;
->>>>>>> 1f0327d... msm_hotplug: Remove up/down work structure and improve big core up/down
 
 	online_little = num_online_little_cpus();
 
@@ -545,6 +529,7 @@ static void msm_hotplug_work(struct work_struct *work)
 		goto reschedule;
 	}
 
+	update_load_stats();
 
 	if (stats.cur_max_load >= hotplug.fast_lane_load) {
 		/* Enter the fast lane */
@@ -591,8 +576,7 @@ reschedule:
 	reschedule_hotplug_work();
 }
 
-#ifdef CONFIG_FB
-static void msm_hotplug_suspend(void)
+void msm_hotplug_suspend(void)
 {
 	int cpu;
 
@@ -605,8 +589,13 @@ static void msm_hotplug_suspend(void)
 	mutex_unlock(&hotplug.msm_hotplug_mutex);
 
 	/* Flush hotplug workqueue */
-	flush_workqueue(hotplug_wq);
-	cancel_delayed_work_sync(&hotplug_work);
+	if (timeout_enabled) {
+		timeout_enabled = false;
+		msm_hotplug_fingerprint_called = false;
+	} else {
+		flush_workqueue(hotplug_wq);
+		cancel_delayed_work_sync(&hotplug_work);
+	}
 
 	// Turn off little cores but remain max_cpus_online_susp
 	// Skip cpu 0
@@ -624,8 +613,9 @@ static void msm_hotplug_suspend(void)
 
 	return;
 }
+EXPORT_SYMBOL(msm_hotplug_suspend);
 
-static void msm_hotplug_resume(void)
+void msm_hotplug_resume(void)
 {
 	int cpu, required_reschedule = 0, required_wakeup = 0;
 
@@ -660,26 +650,18 @@ static void msm_hotplug_resume(void)
 
 	return;
 }
+EXPORT_SYMBOL(msm_hotplug_resume);
 
-
-static int fb_notifier_callback(struct notifier_block *self,
-				unsigned long event, void *data)
+void msm_hotplug_resume_timeout(void)
 {
-	struct fb_event *evdata = data;
-	int *blank;
+	if (timeout_enabled || !hotplug.suspended)
+		return;
 
-	if (evdata && evdata->data && event == FB_EVENT_BLANK) {
-		blank = evdata->data;
-		if ((*blank == FB_BLANK_UNBLANK) ||
-		    (*blank == FB_BLANK_VSYNC_SUSPEND))
-			msm_hotplug_resume();
-		else if (*blank == FB_BLANK_POWERDOWN)
-			msm_hotplug_suspend();
-	}
-
-	return 0;
+	timeout_enabled = true;
+	pre_time = ktime_to_ms(ktime_get());
+	msm_hotplug_resume();
 }
-#endif
+EXPORT_SYMBOL(msm_hotplug_resume_timeout);
 
 static int msm_hotplug_start(void)
 {
@@ -701,16 +683,6 @@ static int msm_hotplug_start(void)
 		ret = -ENOMEM;
 		goto err_dev;
 	}
-
-#ifdef CONFIG_FB
-	notif.notifier_call = fb_notifier_callback;
-
-	ret = fb_register_client(&notif);
-	if (ret) {
-		pr_err("%s: Failed to register fb_notifier: %d\n",
-		       MSM_HOTPLUG, ret);
-	}
-#endif
 
 	mutex_init(&stats.stats_mutex);
 	mutex_init(&hotplug.msm_hotplug_mutex);
@@ -736,7 +708,7 @@ static int msm_hotplug_start(void)
 err_dev:
 	destroy_workqueue(hotplug_wq);
 err_out:
-	hotplug.msm_enabled = 0;
+	msm_enabled = 0;
 	return ret;
 }
 
@@ -819,7 +791,7 @@ static ssize_t show_enable_hotplug(struct device *dev,
 				   struct device_attribute *msm_hotplug_attrs,
 				   char *buf)
 {
-	return sprintf(buf, "%u\n", hotplug.msm_enabled);
+	return sprintf(buf, "%u\n", msm_enabled);
 }
 
 static ssize_t store_enable_hotplug(struct device *dev,
@@ -833,12 +805,12 @@ static ssize_t store_enable_hotplug(struct device *dev,
 	if (ret != 1 || val < 0 || val > 1)
 		return -EINVAL;
 
-	if (val == hotplug.msm_enabled)
+	if (val == msm_enabled)
 		return count;
 
-	hotplug.msm_enabled = val;
+	msm_enabled = val;
 
-	if (hotplug.msm_enabled)
+	if (msm_enabled)
 		ret = msm_hotplug_start();
 	else
 		msm_hotplug_stop();
@@ -1177,7 +1149,7 @@ static int msm_hotplug_probe(struct platform_device *pdev)
 		goto err_dev;
 	}
 
-	if (hotplug.msm_enabled) {
+	if (msm_enabled) {
 		ret = msm_hotplug_start();
 		if (ret != 0)
 			goto err_dev;
@@ -1196,7 +1168,7 @@ static struct platform_device msm_hotplug_device = {
 
 static int msm_hotplug_remove(struct platform_device *pdev)
 {
-	if (hotplug.msm_enabled)
+	if (msm_enabled)
 		msm_hotplug_stop();
 
 	return 0;
@@ -1248,6 +1220,7 @@ static void __exit msm_hotplug_exit(void)
 late_initcall(msm_hotplug_init);
 module_exit(msm_hotplug_exit);
 
-MODULE_AUTHOR("Fluxi <linflux@arcor.de>");
-MODULE_DESCRIPTION("MSM Hotplug Driver");
+MODULE_AUTHOR("jollaman999 <admin@jollaman999.com>");
+MODULE_DESCRIPTION("MSM Hotplug Driver for big.LITTLE");
 MODULE_LICENSE("GPLv2");
+
