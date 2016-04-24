@@ -164,6 +164,9 @@ static bool mdss_mdp_kcal_is_panel_on(void)
 }
 
 static void mdss_mdp_kcal_update_pcc(struct kcal_lut_data *lut_data)
+=======
+static void mdss_mdp_pp_kcal_update(struct kcal_lut_data *lut_data)
+>>>>>>> parent of 66b7853... msm: mdss: KCAL: Allow kcal_enable to control all post-processing features
 {
 	u32 copyback = 0;
 	struct mdp_pcc_cfg_data pcc_config;
@@ -188,7 +191,7 @@ static void mdss_mdp_kcal_update_pcc(struct kcal_lut_data *lut_data)
 	mdss_mdp_pcc_config(&pcc_config, &copyback);
 }
 
-static void mdss_mdp_kcal_update_pa(struct kcal_lut_data *lut_data)
+static void mdss_mdp_pp_kcal_pa(struct kcal_lut_data *lut_data)
 {
 	u32 copyback = 0;
 	struct mdp_pa_cfg_data pa_config;
@@ -199,9 +202,10 @@ static void mdss_mdp_kcal_update_pa(struct kcal_lut_data *lut_data)
 		memset(&pa_config, 0, sizeof(struct mdp_pa_cfg_data));
 
 		pa_config.block = MDP_LOGICAL_BLOCK_DISP_0;
-		pa_config.pa_data.flags = lut_data->enable ?
+         	pa_config.pa_data.flags = lut_data->enable ?
 			MDP_PP_OPS_WRITE | MDP_PP_OPS_ENABLE :
 				MDP_PP_OPS_WRITE | MDP_PP_OPS_DISABLE;
+		pa_config.pa_data.flags = MDP_PP_OPS_WRITE | MDP_PP_OPS_ENABLE;
 		pa_config.pa_data.hue_adj = lut_data->hue;
 		pa_config.pa_data.sat_adj = lut_data->sat;
 		pa_config.pa_data.val_adj = lut_data->val;
@@ -215,6 +219,7 @@ static void mdss_mdp_kcal_update_pa(struct kcal_lut_data *lut_data)
 		pa_v2_config.pa_v2_data.flags = lut_data->enable ?
 			MDP_PP_OPS_WRITE | MDP_PP_OPS_ENABLE :
 				MDP_PP_OPS_WRITE | MDP_PP_OPS_DISABLE;
+		pa_v2_config.pa_v2_data.flags = MDP_PP_OPS_WRITE | MDP_PP_OPS_ENABLE;
 		pa_v2_config.pa_v2_data.flags |= MDP_PP_PA_HUE_ENABLE;
 		pa_v2_config.pa_v2_data.flags |= MDP_PP_PA_HUE_MASK;
 		pa_v2_config.pa_v2_data.flags |= MDP_PP_PA_SAT_ENABLE;
@@ -232,7 +237,7 @@ static void mdss_mdp_kcal_update_pa(struct kcal_lut_data *lut_data)
 	}
 }
 
-static void mdss_mdp_kcal_update_igc(struct kcal_lut_data *lut_data)
+static void mdss_mdp_pp_kcal_invert(struct kcal_lut_data *lut_data)
 {
 	u32 copyback = 0, copy_from_kernel = 1;
 	struct mdp_igc_lut_data igc_config;
@@ -243,6 +248,8 @@ static void mdss_mdp_kcal_update_igc(struct kcal_lut_data *lut_data)
 	igc_config.ops = lut_data->invert && lut_data->enable ?
 		MDP_PP_OPS_WRITE | MDP_PP_OPS_ENABLE :
 			MDP_PP_OPS_WRITE | MDP_PP_OPS_DISABLE;
+	igc_config.ops = lut_data->invert ? MDP_PP_OPS_WRITE | MDP_PP_OPS_ENABLE :
+		MDP_PP_OPS_WRITE | MDP_PP_OPS_DISABLE;
 	igc_config.len = IGC_LUT_ENTRIES;
 	igc_config.c0_c1_data = &igc_Table_Inverted[0];
 	igc_config.c2_data = &igc_Table_RGB[0];
@@ -345,6 +352,7 @@ static ssize_t kcal_enable_store(struct device *dev,
 		mdss_mdp_kcal_update_igc(lut_data);
 	} else
 		lut_data->queue_changes = true;
+	mdss_mdp_pp_kcal_update(lut_data);
 
 	return count;
 }
@@ -375,6 +383,8 @@ static ssize_t kcal_invert_store(struct device *dev,
 	else
 		lut_data->queue_changes = true;
 
+	mdss_mdp_pp_kcal_invert(lut_data);
+
 	return count;
 }
 
@@ -402,6 +412,7 @@ static ssize_t kcal_sat_store(struct device *dev,
 		mdss_mdp_kcal_update_pa(lut_data);
 	else
 		lut_data->queue_changes = true;
+	mdss_mdp_pp_kcal_pa(lut_data);
 
 	return count;
 }
@@ -430,6 +441,7 @@ static ssize_t kcal_hue_store(struct device *dev,
 		mdss_mdp_kcal_update_pa(lut_data);
 	else
 		lut_data->queue_changes = true;
+	mdss_mdp_pp_kcal_pa(lut_data);
 
 	return count;
 }
@@ -458,6 +470,7 @@ static ssize_t kcal_val_store(struct device *dev,
 		mdss_mdp_kcal_update_pa(lut_data);
 	else
 		lut_data->queue_changes = true;
+	mdss_mdp_pp_kcal_pa(lut_data);
 
 	return count;
 }
@@ -486,6 +499,7 @@ static ssize_t kcal_cont_store(struct device *dev,
 		mdss_mdp_kcal_update_pa(lut_data);
 	else
 		lut_data->queue_changes = true;
+	mdss_mdp_pp_kcal_pa(lut_data);
 
 	return count;
 }
