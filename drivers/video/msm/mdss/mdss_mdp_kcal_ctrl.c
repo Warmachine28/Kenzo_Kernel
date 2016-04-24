@@ -250,6 +250,22 @@ static void mdss_mdp_kcal_update_igc(struct kcal_lut_data *lut_data)
 	mdss_mdp_igc_lut_config(&igc_config, &copyback, copy_from_kernel);
 }
 
+
+static void kcal_apply_values(struct kcal_lut_data *lut_data)
+{
+	/* gc_lut_* will save lut values even when disabled and
+	 * properly restore them on enable.
+	 */
+	lut_data->red = (lut_data->red < lut_data->minimum) ?
+		lut_data->minimum : lut_data->red;
+	lut_data->green = (lut_data->green < lut_data->minimum) ?
+		lut_data->minimum : lut_data->green;
+	lut_data->blue = (lut_data->blue < lut_data->minimum) ?
+		lut_data->minimum : lut_data->blue;
+
+	mdss_mdp_pp_kcal_update(lut_data);
+}
+
 static ssize_t kcal_store(struct device *dev, struct device_attribute *attr,
 						const char *buf, size_t count)
 {
@@ -655,3 +671,5 @@ static void __exit kcal_ctrl_exit(void)
 
 late_initcall(kcal_ctrl_init);
 module_exit(kcal_ctrl_exit);
+
+MODULE_DESCRIPTION("LCD KCAL Driver");
